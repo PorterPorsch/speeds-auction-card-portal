@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speed's Auction Card Portal</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+  /* ================= CONFIG LIVES IN THE SCRIPT BELOW ================= */
+  :root{--blue:#1e4f9c;--sky:#3fb6e0;--yel:#f6d23a;--bg:#f3f5f8;--line:#dfe3ea;--ink:#1d2430;--mut:#6b7686;--red:#c8372d;--grn:#2f8a4c;--amb:#c98a00}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--ink);background:var(--bg);font-size:14px}
+  header{background:var(--blue);color:#fff;display:flex;align-items:center;gap:18px;padding:0 18px;height:56px}
+  header img{height:38px;background:#fff;border-radius:6px;padding:2px 6px}
+  header h1{font-size:17px;margin:0;font-weight:600}
+  nav{display:flex;gap:4px;margin-left:12px}
+  nav button{background:transparent;border:0;color:#cfe0ff;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:14px}
+  nav button.on{background:rgba(255,255,255,.16);color:#fff}
+  header .who{margin-left:auto;font-size:12px;color:#cfe0ff;display:flex;gap:10px;align-items:center}
+  main{padding:20px;max-width:1280px;margin:0 auto}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+  h2{font-size:18px;margin:0 0 12px}
+  h3{font-size:15px;margin:0 0 8px}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .mut{color:var(--mut)}
+  .small{font-size:12px}
+  input[type=text],input[type=email],input[type=password],input[type=date],input[type=number],select,textarea{border:1px solid #c9d0db;border-radius:6px;padding:7px 9px;font-size:14px;font-family:inherit}
+  textarea{width:100%;min-height:60px}
+  button.b{background:var(--blue);color:#fff;border:0;border-radius:6px;padding:8px 14px;font-size:14px;cursor:pointer}
+  button.b:disabled{opacity:.45;cursor:default}
+  button.g{background:#fff;color:var(--ink);border:1px solid #c9d0db;border-radius:6px;padding:7px 12px;font-size:14px;cursor:pointer}
+  button.r{background:var(--red);color:#fff;border:0;border-radius:6px;padding:8px 14px;cursor:pointer}
+  button.link{background:none;border:0;color:var(--blue);cursor:pointer;padding:0;font-size:inherit;text-decoration:underline}
+  table{border-collapse:collapse;width:100%}
+  th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:middle}
+  th{font-size:12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.03em;background:#fafbfc;position:sticky;top:0}
+  .chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600}
+  .c-new{background:#e3f4e8;color:var(--grn)} .c-renew{background:#e4eefc;color:var(--blue)}
+  .c-conf{background:#fdecea;color:var(--red)} .c-skip{background:#eee;color:#666} .c-warn{background:#fff4d6;color:var(--amb)}
+  .conf{background:#fff8f7;border:1px solid #f3c9c4;border-radius:8px;padding:12px;margin:8px 0}
+  .conf .vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
+  .conf .vs div{background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+  .ph{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px}
+  .ph img{width:100%;height:150px;object-fit:cover;border-radius:5px;cursor:crosshair;background:#ddd}
+  #mag{position:fixed;display:none;width:520px;height:390px;border:3px solid #fff;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.45);background-color:#222;background-repeat:no-repeat;pointer-events:none;z-index:80}
+  .ph.done{opacity:.5}
+  .ph .nm{font-size:12px;min-height:16px;margin-top:4px}
+  .two{display:grid;grid-template-columns:280px 1fr;gap:16px}
+  .wait{max-height:70vh;overflow:auto}
+  .wait div{padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .scroll{max-height:62vh;overflow:auto}
+  #modalBg{position:fixed;inset:0;background:rgba(10,20,40,.45);display:none;align-items:flex-start;justify-content:center;padding-top:6vh;z-index:50}
+  #modal{background:#fff;border-radius:10px;max-width:760px;width:94%;max-height:86vh;overflow:auto;padding:20px}
+  #modal .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+  #zoomBg{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:60;cursor:zoom-out}
+  #zoomBg img{max-width:96vw;max-height:94vh}
+  .toast{position:fixed;bottom:18px;right:18px;background:#1d2430;color:#fff;padding:10px 14px;border-radius:8px;z-index:70;font-size:13px}
+  label.f{display:block;font-size:12px;color:var(--mut);margin:8px 0 3px}
+  .hide{display:none!important}
+  #login{max-width:360px;margin:12vh auto}
+  .preview-wrap{display:inline-block;box-shadow:0 2px 10px rgba(0,0,0,.18);border-radius:6px;overflow:hidden;zoom:1.6}
+
+  /* ================= THE CARD (CR80, 3.375in x 2.125in) ================= */
+  .card{width:3.375in;height:2.125in;position:relative;overflow:hidden;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}
+  .card .photo{position:absolute;left:.093in;top:.183in;width:.90in;height:.673in;object-fit:cover;background:#eee}
+  .card .logo{position:absolute;left:1.40in;top:.07in;width:.86in;height:.37in;object-fit:contain}
+  .card .name{position:absolute;left:1.09in;top:.49in;width:2.22in;font-size:.17in;line-height:1.1;white-space:nowrap;overflow:hidden}
+  .card .num{position:absolute;left:.95in;top:.90in;width:1.96in;text-align:center;font-size:.75in;line-height:.75in;font-weight:700;white-space:nowrap;letter-spacing:-.01em}
+  .card .exp{position:absolute;left:.165in;top:1.64in;font-size:.15in;white-space:nowrap}
+  .card .exp span{margin-left:.11in}
+  .card .bar{position:absolute;left:.49in;top:1.855in;width:2.46in;height:.16in}
+  .card .bar svg{width:100%;height:100%;display:block}
+
+  .hist{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+  .hist .sum{padding:8px 10px;background:#fafbfc;border-bottom:1px solid var(--line);color:var(--ink)}
+  .hist .ev{display:grid;grid-template-columns:120px 86px 1fr;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);color:var(--ink)}
+  .hist .ev:last-child{border-bottom:0}
+  .hist .ev .by{color:var(--mut);font-size:11px}
+  .ntthumb{width:96px;height:72px;object-fit:cover;border-radius:4px;cursor:zoom-in;background:#ddd}
+
+  /* ================= NOT-IN-TOPS CARD ================= */
+  .card.ntc .ntp{position:absolute;left:.12in;top:.12in;width:1.45in;height:1.09in;object-fit:cover;background:#eee}
+  .card.ntc .ntt{position:absolute;left:1.68in;top:.12in;width:1.6in;font-size:.23in;font-weight:700;line-height:1.05;color:#b00}
+  .card.ntc .ntn{position:absolute;left:1.68in;top:.66in;width:1.6in;font-size:.16in}
+  .card.ntc .ntn b{font-size:.34in;display:block;line-height:1.1}
+  .card.ntc .ntx{position:absolute;left:.12in;top:1.3in;width:3.15in;font-size:.14in;line-height:1.25;max-height:.5in;overflow:hidden}
+  .card.ntc .ntd{position:absolute;left:.12in;bottom:.1in;width:3.15in;font-size:.11in;color:#333;display:flex;justify-content:space-between}
+
+  /* ================= NOT-IN-TOPS REPORT (letter paper) ================= */
+  .report{page:report;font-family:Arial,Helvetica,sans-serif;color:#000;width:7.5in}
+  .report .rh{display:flex;align-items:center;gap:.2in;border-bottom:2px solid #000;padding-bottom:.08in;margin-bottom:.12in}
+  .report .rh img{height:.55in}
+  .report .rh h1{font-size:18pt;margin:0}
+  .report .rh div{font-size:10pt}
+  .report table{width:100%;border-collapse:collapse;font-size:11pt}
+  .report th{background:none;color:#000;font-size:9pt;border-bottom:1px solid #000;position:static}
+  .report td{border-bottom:1px solid #999;padding:.06in;vertical-align:middle}
+  .report tr{break-inside:avoid;page-break-inside:avoid}
+  .report td img{width:1.3in;height:.98in;object-fit:cover;display:block}
+  .report .act{width:2in}
+  .report .foot{font-size:9pt;margin-top:.1in}
+
+  #printArea{display:none}
+  @media print{
+    @page{size:3.375in 2.125in;margin:0}
+    @page report{size:letter portrait;margin:.5in}
+    html,body{background:#fff;margin:0;padding:0}
+    body>*:not(#printArea){display:none!important}
+    #printArea{display:block}
+    #printArea .card{page-break-after:always;break-after:page}
+    #printArea .card:last-child{page-break-after:auto;break-after:auto}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login" class="panel hide">
+  <h2>Speed's Auction Card Portal</h2>
+  <label class="f">Email</label><input id="liEmail" type="email" style="width:100%">
+  <label class="f">Password</label><input id="liPass" type="password" style="width:100%">
+  <div class="row" style="margin-top:14px"><button class="b" id="liBtn">Sign in</button><span id="liMsg" class="mut small"></span></div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hide">
+<header>
+  <img id="hdrLogo" alt="">
+  <h1>Speed's Auction Card Portal</h1>
+  <nav>
+    <button data-v="import" data-perm="import">Weekly Import</button>
+    <button data-v="photos" data-perm="photos">Photos</button>
+    <button data-v="records" data-perm="staff">Records</button>
+    <button data-v="notops" data-perm="staff">Not in Tops <span id="ntCount"></span></button>
+    <button data-v="queue" data-perm="print">Print Queue <span id="qCount"></span></button>
+    <button data-v="archive" data-perm="staff">Archive</button>
+    <button data-v="users" data-perm="admin">Users</button>
+    <button data-v="settings" data-perm="admin">Settings</button>
+  </nav>
+  <div class="who"><span id="whoEmail"></span><button class="g" id="logout" style="padding:3px 8px;font-size:12px">Sign out</button></div>
+</header>
+<main>
+
+<!-- WEEKLY IMPORT -->
+<section id="v-import">
+  <div class="panel">
+    <h2>Weekly bidder list</h2>
+    <p class="mut" style="margin-top:0">Upload this week's buyer CSV from Tops. Driver's license and address columns are dropped and never saved.</p>
+    <div class="row">
+      <div><label class="f">Card issue date</label><input type="date" id="impDate"></div>
+      <div><label class="f">Buyer CSV</label><input type="file" id="impFile" accept=".csv,text/csv"></div>
+      <div style="max-width:420px"><label class="small" style="display:block;margin-top:18px"><input type="checkbox" id="impFull"> <b>This is the full Tops bidder list</b> — add anyone missing and update names/notes, but don't issue new cards or change card dates</label></div>
+    </div>
+  </div>
+  <div id="impReview" class="panel hide"></div>
+</section>
+
+<!-- PHOTOS -->
+<section id="v-photos" class="hide">
+  <div class="panel">
+    <h2>Match photos</h2>
+    <div class="row">
+      <input type="file" id="phFiles" accept="image/*" multiple>
+      <span class="mut small">Pick all the photos from the memory card. Hold the mouse over the card in a photo to enlarge it, type the bidder # and press Enter. Click a photo to see it full screen. Use "remove" for duplicate shots.</span>
+    </div>
+  </div>
+  <div class="two">
+    <div class="panel wait">
+      <h3>Waiting for a photo</h3>
+      <div class="row small" style="margin-bottom:6px"><label>Issued <input type="date" id="phBatch"></label></div>
+      <div id="phWaiting"></div>
+    </div>
+    <div><div id="phLeft" class="mut small" style="margin-bottom:8px"></div><div id="phGrid" class="grid"></div>
+      <details id="phDoneBox" class="panel hide" style="margin-top:14px;padding:12px 16px"><summary style="cursor:pointer"><b id="phDoneTitle">Done</b> <span class="mut small">— click to see or undo</span></summary><div id="phDone" style="margin-top:8px"></div></details></div>
+  </div>
+</section>
+
+<!-- RECORDS -->
+<section id="v-records" class="hide">
+  <div class="panel">
+    <div class="row">
+      <h2 style="margin:0">Bidders <span id="recTotal" class="mut small"></span></h2>
+      <input type="text" id="recSearch" placeholder="Search name or #" style="width:240px">
+      <select id="recFilter">
+        <option value="all">All</option>
+        <option value="needs">Needs a card</option>
+        <option value="nophoto">No photo</option>
+        <option value="expired">Expired</option>
+      </select>
+      <button class="g" id="recNew" data-perm="edit">+ New bidder</button>
+      <button class="b" id="recQueue" data-perm="print" disabled>Add selected to print queue</button>
+    </div>
+  </div>
+  <div class="panel scroll"><table><thead><tr><th><input type="checkbox" id="recAll"></th><th>#</th><th>Name</th><th>Photo</th><th>Last renewed</th><th>Expires</th><th>Last printed</th><th>Notes</th><th></th></tr></thead><tbody id="recBody"></tbody></table>
+    <div id="recMore" class="mut small" style="padding:8px"></div></div>
+</section>
+
+<!-- NOT IN TOPS -->
+<section id="v-notops" class="hide">
+  <div class="panel">
+    <div class="row">
+      <h2 style="margin:0">Photos not in Tops</h2>
+      <label class="small">Auction date <input type="date" id="ntDate"></label>
+      <label class="small"><input type="checkbox" id="ntAll"> show all open (any date)</label>
+      <select id="ntFormat"><option value="card">Print on cards (one per person)</option><option value="letter">Print on paper (one sheet)</option></select>
+      <button class="b" id="ntPrint">Print report</button>
+    </div>
+    <p class="mut small">People photographed at the auction who weren't in this week's Tops upload. Once they're added to Tops and imported, use "match" to put the photo on their record.</p>
+  </div>
+  <div class="panel scroll"><table><thead><tr><th>Photo</th><th># on card</th><th>Note</th><th>Auction date</th><th></th></tr></thead><tbody id="ntBody"></tbody></table></div>
+</section>
+
+<!-- PRINT QUEUE -->
+<section id="v-queue" class="hide">
+  <div class="panel">
+    <div class="row">
+      <h2 style="margin:0">Print queue</h2>
+      <button class="g" id="qAddNeeds">Add everyone who needs a card and has a photo</button>
+      <button class="g" id="qClear">Clear queue</button>
+      <button class="b" id="qPrint" disabled>Print all</button>
+    </div>
+    <p class="mut small">In the print window pick <b>AlphaCard PRO 500</b>. Under More settings use Margins: None and Scale: Default (100). Cards print in the order shown.</p>
+  </div>
+  <div class="panel scroll"><table><thead><tr><th>#</th><th>Name</th><th>Photo</th><th>Expires</th><th></th></tr></thead><tbody id="qBody"></tbody></table></div>
+</section>
+
+<!-- ARCHIVE -->
+<section id="v-archive" class="hide">
+  <div class="panel">
+    <div class="row"><h2 style="margin:0">Archive</h2><input type="text" id="arSearch" placeholder="Search name or #" style="width:240px"><span class="mut small">Old bidders whose number was reused, or archived by hand.</span></div>
+  </div>
+  <div class="panel scroll"><table><thead><tr><th>#</th><th>Name</th><th>Issued</th><th>Last printed</th><th>Archived</th><th>Reason</th><th></th></tr></thead><tbody id="arBody"></tbody></table></div>
+</section>
+
+<!-- USERS (admin) -->
+<section id="v-users" class="hide">
+  <div class="panel">
+    <div class="row"><h2 style="margin:0">Users</h2><button class="b" id="uAdd">+ Add user</button>
+    <span class="mut small">Tick a box to give that permission. Changes save right away.</span></div>
+  </div>
+  <div class="panel scroll"><table><thead><tr><th>Name</th><th>Email</th>
+    <th title="Weekly Import">Import</th><th title="Photos + Not in Tops">Photos</th><th title="Print cards">Print</th>
+    <th title="Edit records, add bidders">Edit</th><th title="Archive, restore, replace a reused number">Archive</th><th title="Users + Settings + everything">Admin</th>
+    <th>Login</th><th></th></tr></thead><tbody id="uBody"></tbody></table>
+    <p class="mut small" style="margin:10px 0 0"><b>Import</b> weekly Tops list · <b>Photos</b> match photos, Not in Tops · <b>Print</b> print queue · <b>Edit</b> change records, add bidders · <b>Archive</b> archive/restore and replace reused numbers · <b>Admin</b> everything, including Users and Settings. Everyone can look up records.</p>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section id="v-settings" class="hide">
+  <div class="panel" style="max-width:640px">
+    <h2>Settings</h2>
+    <label class="f">Cards are good for (months)</label><input type="number" id="stTerm" min="1" max="60" style="width:90px">
+    <label class="f">Barcode type</label>
+    <select id="stBar"><option value="CODE39">Code 39</option><option value="CODE128">Code 128</option></select>
+    <span class="mut small">Scan a test card at the counter to confirm your scanner reads it.</span>
+    <label class="f">Card logo</label>
+    <div class="row"><input type="file" id="stLogo" accept="image/*"><button class="g" id="stLogoReset">Use built-in logo</button></div>
+    <div class="row" style="margin-top:16px"><button class="b" id="stSave">Save settings</button><button class="g" id="stTest">Print a test card</button></div>
+  </div>
+  <div class="panel" style="max-width:640px"><h3>Card preview</h3><div class="preview-wrap" id="stPreview"></div></div>
+  <div class="panel" style="max-width:640px">
+    <h3>One-time import from CloudBadging</h3>
+    <p class="mut small" style="margin-top:0">Step 1: the Records CSV from CloudBadging. Numbers already in the portal are skipped. Step 2: the photos folder from the Export Data download. Photos are matched by file name (e.g. 1612-photo.jpg). You can run step 2 again; photos already loaded are skipped.</p>
+    <label class="f">Step 1 — Records CSV</label><input type="file" id="cbCsv" accept=".csv">
+    <label class="f">Step 2 — Photos folder</label><input type="file" id="cbPhotos" webkitdirectory multiple>
+    <div id="cbMsg" class="small" style="margin-top:10px"></div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<div id="modalBg"><div id="modal"></div></div>
+<div id="zoomBg"><img id="zoomImg" alt=""></div>
+<div id="mag"></div>
+<div id="printArea"></div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your Supabase project URL and anon key here
+   ============================================================ */
+const SUPABASE_URL = 'https://gmxfefzxzzgggmjmofik.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_NeWkVybcE9LgT08Q-dKzxQ_IOBCqrno';  // publishable key — safe in the browser
+
+const BUILTIN_LOGO = 'data:image/jpeg;base64,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p9T+VrO+1O4ivIFG4EnCIpPAOMMOcHnGK9nK8pqZRS+o4/Ee0gvhbg1KPkndpx8unRmVXEyxU/rGGppN7pSTT+WlmfZysHUMpDKeQQeDS14p8BfhL8SPhPFDpev/ABCtfGHh+NSqQ3Omsl1ENp2hJvNORnGd4bgYGK9rqqkYwk1GV13/AOHO2EnKN5KzCiiisjQKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigArI1rwfoPiSRZNX0TTtUkVNge9tI5iFznGWB4yTx71r0U02tUJpPc8x8X/sy/C3xytsNX8EaVILfd5f2WM2uN2M58oru6DrnFef61/wT/8Ag3q9hNbw6JeaU8h4ubK9bzE5z8u/cPbkGvo6iuqGLxFPSNRr5swlh6M/igvuPjbX/wDgmH4BuLJU0TxFr1hdb8tJevFcIVweNqohznHOe3Suv+EH7LPj34JXaroHxZa60jIDaTqukm4gKgEAL+/DJjJI2kDOMg9K+mqK3lmOKqR5JyuvNJ/mjJYKhGXNGNn5NojgEiwoJmV5QBuZF2gn2GTj86koorzTtCiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD/2Q==';
+const BUCKET = 'bidder-photos';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
+
+let settings = { term_months: 12, barcode_format: 'CODE39', logo_path: null };
+let bidders = [];            // all active bidders
+let byNumber = new Map();    // bidder_number -> bidder
+let logoUrl = BUILTIN_LOGO;
+let queue = [];              // bidder ids
+try { queue = JSON.parse(localStorage.getItem('bc_queue') || '[]'); } catch(e) { queue = []; }
+
+/* ---------------- helpers ---------------- */
+function toast(msg, ms = 2600) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), ms); }
+function saveQueue() { try { localStorage.setItem('bc_queue', JSON.stringify(queue)); } catch(e) {} $('qCount').textContent = queue.length ? `(${queue.length})` : ''; }
+// Bidder numbers are kept exactly as Tops/CloudBadging have them — asterisks included (*8088* and 8088 can both exist)
+// driver's license numbers sometimes get typed into Tops notes — never store them
+function scrubDL(t) { return String(t || '').replace(/(\bD\.?\s?L\.?\s*#?\s*:?\s*)([A-Za-z0-9]{5,})/g, '$1[removed]'); }
+function cleanNumber(raw) { return String(raw ?? '').trim(); }
+function barValue(n) { return String(n).replace(/\*/g, '').toUpperCase(); }
+// for typed lookups: exact first, then ignore asterisks if that gives exactly one bidder
+function findTyped(raw) {
+  const n = cleanNumber(raw); if (!n) return null;
+  if (byNumber.has(n)) return byNumber.get(n);
+  const bare = n.replace(/\*/g, '').toLowerCase();
+  const hits = bidders.filter(b => b.bidder_number.replace(/\*/g, '').toLowerCase() === bare);
+  return hits.length === 1 ? hits[0] : null;
+}
+function normName(s) { return String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, ''); }
+function firstToken(s) { return normName(String(s ?? '').trim().split(/\s+/)[0]); }
+function sameName(a, b) {
+  if (normName(a.last_name) !== normName(b.last_name)) return false;
+  return normName(a.first_name) === normName(b.first_name) || firstToken(a.first_name) === firstToken(b.first_name);
+}
+function fullName(b) { return [b.first_name, b.middle_initial, b.last_name].filter(Boolean).join(' '); }
+function cardName(b) { return `${b.first_name} ${b.last_name}`.trim(); }
+function addMonths(iso, m) { const [y, mo, d] = iso.split('-').map(Number); const dt = new Date(Date.UTC(y, mo - 1 + Number(m), d)); return dt.toISOString().slice(0,10); }
+function fmtDate(v) { return v ? String(v).slice(0,10) : ''; }
+function needsCard(b) { if (!b.date_issued) return false; return !b.last_printed || fmtDate(b.last_printed) < fmtDate(b.date_issued) || (b.photo_date && b.last_printed < b.photo_date); }
+function indexBidders() { byNumber = new Map(bidders.map(b => [b.bidder_number, b])); $('recTotal').textContent = `(${bidders.length.toLocaleString()} active)`; }
+
+function modal(html, buttons = [{label: 'OK', value: true, cls: 'b'}]) {
+  return new Promise(res => {
+    $('modal').innerHTML = html + '<div class="btns">' + buttons.map((b, i) => `<button class="${b.cls || 'g'}" data-i="${i}">${esc(b.label)}</button>`).join('') + '</div>';
+    $('modalBg').style.display = 'flex';
+    $('modal').querySelectorAll('.btns button').forEach(btn => btn.onclick = () => {
+      const b = buttons[+btn.dataset.i];
+      if (b.check && !b.check()) return;
+      $('modalBg').style.display = 'none';
+      res(b.value);
+    });
+  });
+}
+
+const urlCache = new Map();
+async function signedUrls(paths) {
+  const need = [...new Set(paths.filter(p => p && !urlCache.has(p)))];
+  for (let i = 0; i < need.length; i += 100) {
+    const { data, error } = await sb.storage.from(BUCKET).createSignedUrls(need.slice(i, i + 100), 60 * 60 * 6);
+    if (error) { console.error(error); continue; }
+    data.forEach(d => { if (d.signedUrl) urlCache.set(d.path, d.signedUrl); });
+  }
+  return p => urlCache.get(p) || '';
+}
+
+/* ---------------- the card ---------------- */
+function cardEl(b, photoUrl) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.innerHTML = `
+    ${photoUrl ? `<img class="photo" src="${esc(photoUrl)}" alt="">` : `<div class="photo"></div>`}
+    <img class="logo" src="${esc(logoUrl)}" alt="">
+    <div class="name">${esc(cardName(b))}</div>
+    <div class="num">${esc(b.bidder_number)}</div>
+    <div class="exp">Expires<span>${esc(fmtDate(b.expires))}</span></div>
+    <div class="bar"><svg></svg></div>`;
+  try {
+    JsBarcode(el.querySelector('svg'), barValue(b.bidder_number), { format: settings.barcode_format || 'CODE39', displayValue: false, margin: 0, height: 40, width: 2 });
+    const svg = el.querySelector('svg'); svg.setAttribute('preserveAspectRatio', 'none');
+  } catch (e) { console.warn('barcode', e); }
+  return el;
+}
+// shrink long names / numbers so they fit on one line
+function fitCard(el) {
+  for (const sel of ['.name', '.num']) {
+    const t = el.querySelector(sel); if (!t) continue;
+    let fs = parseFloat(getComputedStyle(t).fontSize), guard = 0;
+    while (t.scrollWidth > t.clientWidth + 1 && guard++ < 60) { fs *= 0.95; t.style.fontSize = fs + 'px'; if (sel === '.num') t.style.lineHeight = getComputedStyle(t).lineHeight; }
+  }
+}
+
+/* ---------------- data ---------------- */
+async function loadSettings() {
+  const { data } = await sb.from('bidder_card_settings').select('*').eq('id', 1).maybeSingle();
+  if (data) settings = data;
+  logoUrl = BUILTIN_LOGO;
+  if (settings.logo_path) { const get = await signedUrls([settings.logo_path]); logoUrl = get(settings.logo_path) || BUILTIN_LOGO; }
+  $('hdrLogo').src = logoUrl;
+}
+async function loadBidders() {
+  const all = []; const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await sb.from('bidders').select('*').order('bidder_number').range(from, from + page - 1);
+    if (error) { toast('Could not load bidders: ' + error.message, 6000); break; }
+    all.push(...data); if (data.length < page) break;
+  }
+  bidders = all; indexBidders();
+}
+async function archiveBidder(b, reason) {
+  const { error } = await sb.rpc('archive_bidder', { p_id: b.id, p_reason: reason });
+  if (error) throw error;
+  bidders = bidders.filter(x => x.id !== b.id); queue = queue.filter(id => id !== b.id); saveQueue(); indexBidders();
+}
+
+/* ============================================================
+   WEEKLY IMPORT
+   ============================================================ */
+let impRows = [];
+$('impDate').value = today();
+$('impFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  Papa.parse(f, { header: true, skipEmptyLines: true, complete: r => buildReview(r.data) });
+};
+
+function buildReview(rows) {
+  const seen = new Set();
+  impRows = rows.map(r => {
+    // only these columns are kept — license # and address are never read
+    const rec = {
+      bidder_number: cleanNumber(r['Default Bidder #']),
+      raw_number: String(r['Default Bidder #'] ?? '').trim(),
+      first_name: String(r['First Name'] ?? '').trim(),
+      middle_initial: String(r['Middle Initial'] ?? '').trim(),
+      last_name: String(r['Last Name'] ?? '').trim(),
+      customer: String(r['Customer'] ?? '').trim(),
+      notes: scrubDL(String(r['Notes'] ?? '').trim()),
+      tops_key: String(r['BDRlBidderKey'] ?? '').trim() || null,
+    };
+    let status, existing = null;
+    if (!rec.bidder_number || !rec.last_name) status = 'error';
+    else if (seen.has(rec.bidder_number)) status = 'dup';
+    else {
+      existing = byNumber.get(rec.bidder_number) || null;
+      if (!existing) status = 'new';
+      else if (sameName(existing, rec) || (rec.tops_key && existing.tops_key === rec.tops_key)) status = 'renew';
+      else status = 'conflict';
+    }
+    seen.add(rec.bidder_number);
+    return { rec, status, existing, decision: status === 'conflict' ? null : (status === 'new' || status === 'renew' ? 'apply' : 'skip') };
+  });
+  renderReview();
+}
+
+function renderReview() {
+  const n = s => impRows.filter(r => r.status === s).length;
+  const confs = impRows.filter(r => r.status === 'conflict');
+  const undecided = confs.filter(r => !r.decision).length;
+  let h = `<h2>Review before saving</h2>
+    <div class="row" style="margin-bottom:10px">
+      <span class="chip c-new">${n('new')} new</span><span class="chip c-renew">${n('renew')} renewing</span>
+      <span class="chip c-conf">${confs.length} number reused</span>
+      ${n('dup') ? `<span class="chip c-warn">${n('dup')} duplicate rows skipped</span>` : ''}
+      ${n('error') ? `<span class="chip c-skip">${n('error')} rows missing # or name</span>` : ''}
+    </div>`;
+  if (confs.length) {
+    h += `<h3>Bidder numbers already in use by someone else</h3>
+      <p class="mut small" style="margin-top:0">Pick what to do with each one. "Replace" moves the old bidder to the Archive and creates a new record for this week's bidder.</p>
+      <div class="row" style="margin-bottom:6px"><button class="g" id="cfAllRep">Replace all</button><button class="g" id="cfAllSkip">Skip all</button></div>`;
+    confs.forEach(r => {
+      const i = impRows.indexOf(r), o = r.existing;
+      h += `<div class="conf"><b>Bidder #${esc(r.rec.bidder_number)}</b> — do you want to replace this bidder?
+        <div class="vs">
+          <div><div class="small mut">Currently assigned to</div><b>${esc(fullName(o))}</b><div class="small mut">Issued ${esc(fmtDate(o.date_issued))} · Expires ${esc(fmtDate(o.expires)) || '—'} · Last printed ${esc(fmtDate(o.last_printed)) || 'never'}</div></div>
+          <div><div class="small mut">This week's list</div><b>${esc(fullName(r.rec))}</b><div class="small mut">${esc(r.rec.notes)}</div></div>
+        </div>
+        <label${can('archive') ? '' : ' class="mut" title="Needs Archive permission"'}><input type="radio" name="cf${i}" value="replace" ${r.decision === 'replace' ? 'checked' : ''} ${can('archive') ? '' : 'disabled'}> Replace — archive ${esc(cardName(o))}, create new record for ${esc(cardName(r.rec))}</label><br>
+        <label><input type="radio" name="cf${i}" value="skip" ${r.decision === 'skip' ? 'checked' : ''}> Skip — leave #${esc(r.rec.bidder_number)} with ${esc(cardName(o))}</label>
+      </div>`;
+    });
+  }
+  h += `<details ${confs.length ? '' : 'open'} style="margin-top:12px"><summary>All rows (${impRows.length})</summary>
+    <div class="scroll"><table><thead><tr><th>Status</th><th>#</th><th>Name</th><th>Notes</th></tr></thead><tbody>
+    ${impRows.map(r => `<tr><td>${chip(r)}</td><td>${esc(r.rec.raw_number)}</td><td>${esc(fullName(r.rec))}</td><td class="small">${esc(r.rec.notes)}</td></tr>`).join('')}
+    </tbody></table></div></details>
+    <div class="row" style="margin-top:14px"><button class="b" id="impApply" ${undecided ? 'disabled' : ''}>Save to portal</button>
+    ${undecided ? `<span class="mut small">Decide the ${undecided} reused number${undecided > 1 ? 's' : ''} above first.</span>` : ''}</div>`;
+  $('impReview').innerHTML = h; $('impReview').classList.remove('hide');
+  $('impReview').querySelectorAll('input[type=radio]').forEach(el => el.onchange = () => { impRows[+el.name.slice(2)].decision = el.value; renderReview(); });
+  if ($('cfAllRep')) $('cfAllRep').onclick = () => { confs.forEach(r => r.decision = 'replace'); renderReview(); };
+  if ($('cfAllSkip')) $('cfAllSkip').onclick = () => { confs.forEach(r => r.decision = 'skip'); renderReview(); };
+  $('impApply').onclick = applyImport;
+}
+function chip(r) {
+  if (r.status === 'new') return '<span class="chip c-new">New</span>';
+  if (r.status === 'renew') return '<span class="chip c-renew">Renewing</span>';
+  if (r.status === 'conflict') return r.decision === 'replace' ? '<span class="chip c-conf">Replace</span>' : r.decision === 'skip' ? '<span class="chip c-skip">Skip</span>' : '<span class="chip c-conf">Decide</span>';
+  if (r.status === 'dup') return '<span class="chip c-warn">Duplicate</span>';
+  return '<span class="chip c-skip">Missing info</span>';
+}
+
+async function applyImport() {
+  const full = $('impFull').checked;
+  const issue = $('impDate').value || today();
+  const expires = addMonths(issue, settings.term_months || 12);
+  const src = full ? 'tops' : 'weekly';
+  $('impApply').disabled = true; $('impApply').textContent = 'Saving…';
+  let added = 0, renewed = 0, unchanged = 0, replaced = 0, errors = [];
+  const toInsert = [];
+  const info = r => ({ bidder_number: r.rec.bidder_number, first_name: r.rec.first_name, middle_initial: r.rec.middle_initial, last_name: r.rec.last_name,
+                       customer: r.rec.customer, notes: r.rec.notes, tops_key: r.rec.tops_key });
+  const cardDates = full ? { date_issued: null, expires: null } : { date_issued: issue, expires };
+  const progress = (n) => { $('impApply').textContent = `Saving… ${n.toLocaleString()} of ${impRows.length.toLocaleString()}`; };
+  let n = 0;
+  for (const r of impRows) {
+    n++; if (n % 50 === 0) progress(n);
+    try {
+      if (r.status === 'new') toInsert.push({ ...info(r), ...cardDates, source: src });
+      else if (r.status === 'renew') {
+        const upd = full ? info(r) : { ...info(r), ...cardDates };
+        const changed = Object.keys(upd).some(k => String(upd[k] ?? '') !== String(r.existing[k] ?? ''));
+        if (!changed) { unchanged++; continue; }
+        const { error } = await sb.from('bidders').update(upd).eq('id', r.existing.id); if (error) throw error; renewed++;
+      } else if (r.status === 'conflict' && r.decision === 'replace') {
+        await archiveBidder(r.existing, `Number #${r.rec.bidder_number} reused for ${cardName(r.rec)} on ${issue}`);
+        toInsert.push({ ...info(r), ...cardDates, source: src }); replaced++;
+      }
+    } catch (e) { errors.push(`#${r.rec.bidder_number} ${cardName(r.rec)}: ${e.message}`); }
+  }
+  for (let i = 0; i < toInsert.length; i += 500) {
+    const chunk = toInsert.slice(i, i + 500);
+    const { error } = await sb.from('bidders').insert(chunk);
+    if (error) errors.push(`Adding rows ${i + 1}–${i + chunk.length}: ${error.message}`); else added += chunk.length;
+    $('impApply').textContent = `Adding new bidders… ${Math.min(i + 500, toInsert.length).toLocaleString()} of ${toInsert.length.toLocaleString()}`;
+  }
+  added = Math.max(0, added - replaced);
+  await loadBidders();
+  if (!full) $('phBatch').value = issue;
+  const go = await modal(`<h2>Saved</h2><p>${added.toLocaleString()} new · ${renewed.toLocaleString()} ${full ? 'updated' : 'renewed'}${unchanged ? ` · ${unchanged.toLocaleString()} already up to date` : ''} · ${replaced} replaced (old bidders moved to Archive)</p>
+    ${full ? '<p class="mut">No cards were queued and no card dates were changed. To print someone, open them in Records.</p>' : ''}
+    ${errors.length ? `<p style="color:var(--red)"><b>${errors.length} problem${errors.length > 1 ? 's' : ''}:</b><br>${errors.map(esc).join('<br>')}</p>` : ''}`,
+    full ? [{ label: 'OK', value: false, cls: 'b' }] : [{ label: 'Stay here', value: false }, { label: 'Go match photos', value: true, cls: 'b' }]);
+  $('impFile').value = ''; $('impFull').checked = false; $('impReview').classList.add('hide');
+  if (go) show('photos');
+}
+
+/* ============================================================
+   PHOTOS
+   ============================================================ */
+let phItems = [];
+$('phBatch').value = today();
+$('phBatch').onchange = renderWaiting;
+$('phFiles').onchange = e => {
+  for (const f of e.target.files) phItems.push({ file: f, url: URL.createObjectURL(f), done: null });
+  e.target.value = ''; renderPhotos();
+};
+function renderWaiting() {
+  const d = $('phBatch').value;
+  const list = bidders.filter(b => fmtDate(b.date_issued) === d && (!b.photo_date || fmtDate(b.photo_date) < d)).sort((a, b) => a.last_name.localeCompare(b.last_name));
+  $('phWaiting').innerHTML = list.length ? list.map(b => `<div><b>#${esc(b.bidder_number)}</b> ${esc(cardName(b))}</div>`).join('') : '<div class="mut">Everyone issued on this date has a photo.</div>';
+}
+function renderPhotos() {
+  renderWaiting();
+  $('phGrid').innerHTML = ''; $('phDone').innerHTML = '';
+  const open = phItems.filter(it => !it.done && !it.notops).length, finished = phItems.length - open;
+  $('phLeft').textContent = phItems.length ? `${open} photo${open === 1 ? '' : 's'} left to match${finished ? ` · ${finished} done` : ''}` : '';
+  phItems.forEach((it, i) => {
+    if (it.done || it.notops) {
+      // finished photos leave the grid and go to the folded "Done" list, where they can still be undone
+      const r = document.createElement('div');
+      r.className = 'row'; r.style.cssText = 'padding:5px 0;border-bottom:1px solid var(--line);gap:10px';
+      r.innerHTML = `<img src="${it.url}" style="width:56px;height:42px;object-fit:cover;border-radius:4px" alt="">
+        <div style="flex:1">${it.done ? `✓ #${esc(it.done.bidder_number)} ${esc(cardName(it.done))}`
+          : `<span style="color:var(--amb)">Not in Tops${it.notops.bidder_number_seen ? ' · #' + esc(it.notops.bidder_number_seen) : ''}</span>`}</div>
+        <button class="link undo">undo</button>`;
+      r.querySelector('.undo').onclick = () => undoPhoto(i);
+      $('phDone').appendChild(r);
+      return;
+    }
+    const d = document.createElement('div'); d.className = 'ph';
+    d.innerHTML = `<img src="${it.url}" alt="">
+      <div class="row" style="margin-top:6px;gap:6px"><input type="text" placeholder="Bidder #" style="width:90px"><button class="b" style="padding:6px 10px">Assign</button></div>
+      <div class="nm mut"></div><div class="row small" style="justify-content:space-between"><button class="link nt">Not in Tops</button><button class="link rm" style="color:var(--red)">remove</button></div>`;
+    d.querySelector('img').onclick = () => { hideMag(); $('zoomImg').src = it.url; $('zoomBg').style.display = 'flex'; };
+    attachMag(d.querySelector('img'), it.url);
+    const inp = d.querySelector('input'), nm = d.querySelector('.nm'), btn = d.querySelector('button.b');
+    d.querySelector('.nt').onclick = () => markNotInTops(i, cleanNumber(inp.value));
+    d.querySelector('.rm').onclick = () => { URL.revokeObjectURL(it.url); phItems.splice(i, 1); hideMag(); renderPhotos(); toast('Photo removed from the list'); };
+    inp.oninput = () => { const b = findTyped(inp.value); nm.textContent = inp.value ? (b ? cardName(b) : 'No active bidder with that #') : ''; nm.style.color = b ? 'var(--ink)' : 'var(--red)'; };
+    const go = () => assignPhoto(i, inp.value, btn);
+    btn.onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') go(); };
+    $('phGrid').appendChild(d);
+  });
+  if (phItems.length && !open) $('phGrid').innerHTML = '<div class="panel mut">All photos are matched. Head to the Print Queue when you\'re ready.</div>';
+  $('phDoneBox').classList.toggle('hide', !finished);
+  $('phDoneTitle').textContent = `Done (${finished})`;
+  hideMag();
+  const first = $('phGrid').querySelector('.ph input'); if (first) first.focus();
+}
+$('zoomBg').onclick = () => $('zoomBg').style.display = 'none';
+
+async function shrinkImage(file, max = 1400) {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const s = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
+}
+async function uploadPhotoFor(b, file) {
+  const blob = await shrinkImage(file);
+  const path = `photos/${b.id}/${Date.now()}.jpg`;
+  const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg' });
+  if (error) throw error;
+  const now = new Date().toISOString();
+  const { error: e2 } = await sb.from('bidders').update({ photo_path: path, photo_date: now }).eq('id', b.id);
+  if (e2) throw e2;
+  b.photo_path = path; b.photo_date = now;
+}
+// put a photo back in the unassigned pile: restore the bidder's previous photo, or remove it from Not in Tops
+async function undoPhoto(i) {
+  const it = phItems[i];
+  try {
+    if (it.done) {
+      const b = it.done;
+      const { error } = await sb.from('bidders').update(it.prev).eq('id', b.id); if (error) throw error;
+      Object.assign(b, it.prev);
+      if (it.addedToQueue) { queue = queue.filter(id => id !== b.id); saveQueue(); }
+      toast(`Photo taken off #${b.bidder_number} ${cardName(b)}`);
+      it.done = null; it.prev = null;
+    } else if (it.notops) {
+      const { error } = await sb.from('unmatched_photos').delete().eq('id', it.notops.id); if (error) throw error;
+      it.notops = null; countNotTops(); toast('Taken off the Not in Tops list');
+    }
+  } catch (e) { toast('Undo failed: ' + e.message, 6000); return; }
+  renderPhotos();
+}
+async function assignPhoto(i, num, btn) {
+  const b = findTyped(num); num = cleanNumber(num);
+  if (!b) {
+    const ok = await modal(`<p>There's no active bidder ${num ? '#' + esc(num) : 'with that number'}. Put this photo on the <b>Not in Tops</b> report?</p>`, [{ label: 'Cancel', value: false }, { label: 'Not in Tops', value: true, cls: 'b' }]);
+    if (ok) markNotInTops(i, num);
+    return;
+  }
+  if (b.photo_date && fmtDate(b.photo_date) >= $('phBatch').value) {
+    const ok = await modal(`<p>#${esc(num)} ${esc(cardName(b))} already has a photo from ${esc(fmtDate(b.photo_date))}. Replace it with this one?</p>`, [{ label: 'Cancel', value: false }, { label: 'Replace photo', value: true, cls: 'b' }]);
+    if (!ok) return;
+  }
+  btn.disabled = true; btn.textContent = '…';
+  const prev = { photo_path: b.photo_path, photo_date: b.photo_date }, wasQueued = queue.includes(b.id);
+  try { await uploadPhotoFor(b, phItems[i].file); Object.assign(phItems[i], { done: b, prev, addedToQueue: !wasQueued }); if (!wasQueued) { queue.push(b.id); saveQueue(); } }
+  catch (e) { toast('Upload failed: ' + e.message, 6000); btn.disabled = false; btn.textContent = 'Assign'; return; }
+  renderPhotos();
+}
+
+/* ---------- hover magnifier: move the mouse over a photo to see that spot enlarged ---------- */
+const MAG_SHOW = 0.33;   // the magnifier shows about a third of the photo's width
+function hideMag() { $('mag').style.display = 'none'; }
+function attachMag(img, url) {
+  const mag = $('mag');
+  img.addEventListener('mouseleave', hideMag);
+  img.addEventListener('mousemove', e => {
+    const w = img.naturalWidth, h = img.naturalHeight; if (!w || !h) return;
+    const r = img.getBoundingClientRect();
+    // thumbnails use object-fit: cover, so work out which part of the photo is under the mouse
+    const s = Math.max(r.width / w, r.height / h), ox = (r.width - w * s) / 2, oy = (r.height - h * s) / 2;
+    const ix = (e.clientX - r.left - ox) / s, iy = (e.clientY - r.top - oy) / s;
+    const MW = 520, MH = 390, Z = MW / (w * MAG_SHOW);
+    mag.style.backgroundImage = `url("${url}")`;
+    mag.style.backgroundSize = `${w * Z}px ${h * Z}px`;
+    mag.style.backgroundPosition = `${-(ix * Z - MW / 2)}px ${-(iy * Z - MH / 2)}px`;
+    let left = e.clientX + 24, top = e.clientY - MH / 2;
+    if (left + MW > window.innerWidth - 8) left = e.clientX - MW - 24;
+    top = Math.max(8, Math.min(top, window.innerHeight - MH - 8));
+    mag.style.left = left + 'px'; mag.style.top = top + 'px'; mag.style.display = 'block';
+  });
+}
+
+/* ============================================================
+   NOT IN TOPS
+   ============================================================ */
+async function markNotInTops(i, numSeen) {
+  const it = phItems[i];
+  const vals = await modal(`<h2>Not in Tops</h2>
+    <div class="row"><img src="${it.url}" style="width:180px;border-radius:6px">
+    <div><label class="f"># on their card (if you can read it)</label><input type="text" id="ntNum" value="${esc(numSeen)}" style="width:120px">
+    <label class="f">Name or note</label><input type="text" id="ntNote" style="width:280px" placeholder="e.g. said his name is …"></div></div>`,
+    [{ label: 'Cancel', value: null }, { label: 'Save to report', value: 'ok', cls: 'b' }]);
+  if (!vals) return;
+  const seen = cleanNumber($('ntNum').value), note = $('ntNote').value.trim();
+  try {
+    const blob = await shrinkImage(it.file);
+    const path = `unmatched/${$('phBatch').value}/${Date.now()}.jpg`;
+    const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg' }); if (error) throw error;
+    const { data, error: e2 } = await sb.from('unmatched_photos').insert({ photo_path: path, bidder_number_seen: seen, note, batch_date: $('phBatch').value }).select().single();
+    if (e2) throw e2;
+    it.notops = data; renderPhotos(); countNotTops();
+  } catch (e) { toast('Could not save: ' + e.message, 6000); }
+}
+$('ntDate').value = today();
+$('ntDate').onchange = renderNotTops; $('ntAll').onchange = renderNotTops;
+let ntRows = [];
+async function countNotTops() {
+  const { count } = await sb.from('unmatched_photos').select('id', { count: 'exact', head: true }).is('resolved_at', null);
+  $('ntCount').textContent = count ? `(${count})` : '';
+}
+async function loadNotTops() {
+  let q = sb.from('unmatched_photos').select('*').is('resolved_at', null).order('batch_date', { ascending: false }).order('created_at');
+  if (!$('ntAll').checked) q = q.eq('batch_date', $('ntDate').value);
+  const { data, error } = await q; if (error) { toast(error.message, 6000); return []; }
+  return data;
+}
+async function renderNotTops() {
+  ntRows = await loadNotTops();
+  const get = await signedUrls(ntRows.map(r => r.photo_path));
+  $('ntBody').innerHTML = ntRows.map(r => `<tr><td><img class="ntthumb" src="${esc(get(r.photo_path))}" data-z="${esc(get(r.photo_path))}"></td>
+    <td><b>${esc(r.bidder_number_seen) || '—'}</b></td><td>${esc(r.note)}</td><td>${esc(r.batch_date)}</td>
+    <td>${can('photos') ? `<button class="link" data-m="${r.id}">match to bidder</button> · <button class="link" data-d="${r.id}">dismiss</button>` : ''}</td></tr>`).join('')
+    || '<tr><td colspan="5" class="mut">No open photos for this date.</td></tr>';
+  $('ntBody').querySelectorAll('[data-z]').forEach(img => { img.onclick = () => { hideMag(); $('zoomImg').src = img.dataset.z; $('zoomBg').style.display = 'flex'; }; attachMag(img, img.dataset.z); });
+  $('ntBody').querySelectorAll('[data-m]').forEach(a => a.onclick = () => matchNotTops(ntRows.find(r => r.id === a.dataset.m)));
+  $('ntBody').querySelectorAll('[data-d]').forEach(a => a.onclick = async () => {
+    const ok = await modal('<p>Dismiss this photo from the Not in Tops list?</p>', [{ label: 'Cancel', value: false }, { label: 'Dismiss', value: true, cls: 'r' }]);
+    if (!ok) return;
+    await sb.from('unmatched_photos').update({ resolved_at: new Date().toISOString(), resolution: 'dismissed' }).eq('id', a.dataset.d);
+    renderNotTops(); countNotTops();
+  });
+}
+async function matchNotTops(r) {
+  const ok = await modal(`<h2>Match photo to a bidder</h2><label class="f">Bidder #</label><input type="text" id="mNum" value="${esc(r.bidder_number_seen)}" style="width:120px"> <span id="mName" class="mut"></span>`,
+    [{ label: 'Cancel', value: false }, { label: 'Use this photo', value: true, cls: 'b', check: () => { if (!findTyped($('mNum').value)) { $('mName').textContent = 'No active bidder with that # — import them first'; return false; } return true; } }]);
+  if (!ok) return;
+  const b = findTyped($('mNum').value); const now = new Date().toISOString();
+  const { error } = await sb.from('bidders').update({ photo_path: r.photo_path, photo_date: now }).eq('id', b.id);
+  if (error) return toast(error.message, 6000);
+  b.photo_path = r.photo_path; b.photo_date = now;
+  await sb.from('unmatched_photos').update({ resolved_at: now, resolved_bidder_id: b.id, resolution: `matched to #${b.bidder_number}` }).eq('id', r.id);
+  if (!queue.includes(b.id)) { queue.push(b.id); saveQueue(); }
+  toast(`Photo added to #${b.bidder_number} ${cardName(b)} and queued to print`); renderNotTops(); countNotTops();
+}
+$('ntPrint').onclick = async () => {
+  const rows = await loadNotTops();
+  if (!rows.length) return toast('Nothing to print for this date');
+  const get = await signedUrls(rows.map(r => r.photo_path));
+  const dateLabel = $('ntAll').checked ? 'All open' : $('ntDate').value;
+  const area = $('printArea');
+  if ($('ntFormat').value === 'card') {
+    area.innerHTML = rows.map(r => `<div class="card ntc">
+      <img class="ntp" src="${esc(get(r.photo_path))}" alt="">
+      <div class="ntt">NOT IN<br>TOPS</div>
+      <div class="ntn"># on card<b>${esc(r.bidder_number_seen) || '—'}</b></div>
+      <div class="ntx">${esc(r.note)}</div>
+      <div class="ntd"><span>Auction ${esc(r.batch_date)}</span><span>Printed ${esc(today())}</span></div></div>`).join('');
+  } else area.innerHTML = `<div class="report">
+    <div class="rh"><img src="${esc(logoUrl)}"><div><h1>Photographed — Not in Tops</h1>
+      <div>Auction date: <b>${esc(dateLabel)}</b> &nbsp;·&nbsp; ${rows.length} ${rows.length > 1 ? 'people' : 'person'} &nbsp;·&nbsp; Printed ${esc(new Date().toLocaleString())}</div></div></div>
+    <table><thead><tr><th>Photo</th><th># on card</th><th>Name / note</th><th>Auction date</th><th class="act">Added to Tops (initials / #)</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td><img src="${esc(get(r.photo_path))}"></td><td style="font-size:16pt"><b>${esc(r.bidder_number_seen) || '—'}</b></td><td>${esc(r.note)}</td><td>${esc(r.batch_date)}</td><td class="act"></td></tr>`).join('')}
+    </tbody></table>
+    <div class="foot">These people had their photo taken at the auction but were not in the Tops upload. Add them to Tops, then re-import so their card can print.</div></div>`;
+  area.style.display = 'block'; area.style.position = 'absolute'; area.style.left = '-9999px';
+  await Promise.all([...area.querySelectorAll('img')].map(img => img.complete ? 0 : new Promise(res => { img.onload = img.onerror = res; })));
+  area.style.cssText = '';
+  window.print();
+};
+
+/* ============================================================
+   RECORDS
+   ============================================================ */
+let recSel = new Set();
+$('recSearch').oninput = renderRecords; $('recFilter').onchange = renderRecords;
+function recMatches() {
+  const q = $('recSearch').value.trim().toLowerCase(), f = $('recFilter').value, t = today();
+  return bidders.filter(b => {
+    if (f === 'needs' && !needsCard(b)) return false;
+    if (f === 'nophoto' && b.photo_path) return false;
+    if (f === 'expired' && !(b.expires && fmtDate(b.expires) < t)) return false;
+    if (!q) return true;
+    return b.bidder_number.toLowerCase().includes(q) || fullName(b).toLowerCase().includes(q);
+  });
+}
+function renderRecords() {
+  const list = recMatches().sort((a, b) => (fmtDate(b.updated_at)).localeCompare(fmtDate(a.updated_at)));
+  const shown = list.slice(0, 300);
+  $('recBody').innerHTML = shown.map(b => `<tr>
+    <td><input type="checkbox" data-id="${b.id}" ${recSel.has(b.id) ? 'checked' : ''}></td>
+    <td><b>${esc(b.bidder_number)}</b></td><td>${esc(fullName(b))}</td>
+    <td>${b.photo_path ? '✓ ' + esc(fmtDate(b.photo_date)) : '<span class="mut">none</span>'}</td>
+    <td>${esc(fmtDate(b.date_issued))}</td><td>${esc(fmtDate(b.expires))}</td>
+    <td>${b.last_printed ? esc(fmtDate(b.last_printed)) + ` <span class="mut small">(${b.print_count || 0}×)</span>` : '<span class="mut">never</span>'}${needsCard(b) ? ' <span class="chip c-warn">needs card</span>' : ''}</td>
+    <td class="small">${esc(b.notes)}</td>
+    <td><button class="link" data-edit="${b.id}">open</button></td></tr>`).join('');
+  $('recMore').textContent = list.length > 300 ? `Showing 300 of ${list.length.toLocaleString()} — search to narrow down.` : `${list.length.toLocaleString()} shown`;
+  $('recBody').querySelectorAll('input[type=checkbox]').forEach(c => c.onchange = () => { c.checked ? recSel.add(c.dataset.id) : recSel.delete(c.dataset.id); $('recQueue').disabled = !recSel.size; });
+  $('recBody').querySelectorAll('[data-edit]').forEach(a => a.onclick = () => editBidder(bidders.find(b => b.id === a.dataset.edit)));
+  $('recQueue').disabled = !recSel.size;
+}
+$('recAll').onchange = e => { recMatches().slice(0, 300).forEach(b => e.target.checked ? recSel.add(b.id) : recSel.delete(b.id)); renderRecords(); };
+$('recQueue').onclick = () => { recSel.forEach(id => { if (!queue.includes(id)) queue.push(id); }); recSel.clear(); saveQueue(); renderRecords(); toast('Added to print queue'); };
+$('recNew').onclick = () => editBidder(null);
+
+/* ---------- per-bidder history (written automatically by the database) ---------- */
+const EV_LABEL = { added: ['Added', 'c-new'], issued: ['Card issued', 'c-renew'], renewed: ['Renewed', 'c-renew'], printed: ['Printed', 'c-new'],
+                   photo: ['Photo', 'c-skip'], edited: ['Edited', 'c-warn'], archived: ['Archived', 'c-conf'], restored: ['Restored', 'c-renew'] };
+async function loadHistory(b, el) {
+  if (!el) return;
+  const { data, error } = await sb.from('bidder_history').select('*').eq('bidder_id', b.id).order('happened_at', { ascending: false }).limit(300);
+  if (error) { el.textContent = 'Could not load history: ' + error.message; return; }
+  const last = ev => data.find(h => ev.includes(h.event));
+  const ren = last(['renewed', 'issued']), pr = last(['printed']), ph = last(['photo']);
+  const when = h => h ? new Date(h.happened_at).toLocaleDateString() : '—';
+  el.innerHTML = `<div class="sum"><b>Last renewal:</b> ${b.date_issued ? esc(fmtDate(b.date_issued)) : when(ren)} &nbsp;·&nbsp; <b>Expires:</b> ${esc(fmtDate(b.expires)) || '—'}
+      &nbsp;·&nbsp; <b>Last printed:</b> ${b.last_printed ? esc(fmtDate(b.last_printed)) + ` (${b.print_count || 0} prints)` : 'never'} &nbsp;·&nbsp; <b>Photo:</b> ${b.photo_date ? esc(fmtDate(b.photo_date)) : 'none'}</div>`
+    + (data.length ? data.map(h => { const [lab, cls] = EV_LABEL[h.event] || [h.event, 'c-skip'];
+        return `<div class="ev"><div>${esc(new Date(h.happened_at).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))}</div>
+          <div><span class="chip ${cls}">${esc(lab)}</span></div><div>${esc(h.details)}${h.by_name ? ` <span class="by">— ${esc(h.by_name)}</span>` : ''}</div></div>`; }).join('')
+      : '<div class="ev"><div></div><div></div><div>No history yet.</div></div>');
+}
+async function editBidder(b) {
+  const isNew = !b;
+  const cur = b || { bidder_number: '', first_name: '', middle_initial: '', last_name: '', notes: '', date_issued: today(), expires: addMonths(today(), settings.term_months || 12) };
+  let pendingFile = null;
+  const get = await signedUrls([cur.photo_path]);
+  const html = `<h2>${isNew ? 'New bidder' : 'Bidder #' + esc(cur.bidder_number)}</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr 70px;gap:8px">
+      <div><label class="f">First name</label><input type="text" id="eFirst" value="${esc(cur.first_name)}" style="width:100%"></div>
+      <div><label class="f">Last name</label><input type="text" id="eLast" value="${esc(cur.last_name)}" style="width:100%"></div>
+      <div><label class="f">MI</label><input type="text" id="eMI" value="${esc(cur.middle_initial)}" style="width:100%"></div>
+      <div><label class="f">Bidder #</label><input type="text" id="eNum" value="${esc(cur.bidder_number)}" style="width:100%"></div>
+      <div><label class="f">Issued</label><input type="date" id="eIss" value="${esc(fmtDate(cur.date_issued))}" style="width:100%"></div>
+      <div></div>
+      <div><label class="f">Expires</label><input type="date" id="eExp" value="${esc(fmtDate(cur.expires))}" style="width:100%"></div>
+      <div>${can('edit') ? '<label class="f">Photo</label><input type="file" id="ePhoto" accept="image/*">' : '<input type="file" id="ePhoto" class="hide">'}</div>
+    </div>
+    <label class="f">Notes</label><textarea id="eNotes">${esc(cur.notes)}</textarea>
+    <h3 style="margin-top:12px">Card</h3><div class="preview-wrap" id="ePrev"></div>
+    ${isNew ? '' : `<h3 style="margin-top:16px">History</h3><div id="eHist" class="hist mut small">Loading…</div>`}`;
+  const p = modal(html, [
+    ...(isNew || !can('archive') ? [] : [{ label: 'Archive this bidder', value: 'archive', cls: 'r' }]),
+    { label: can('edit') ? 'Cancel' : 'Close', value: null },
+    ...(!isNew && can('print') && !can('edit') ? [{ label: 'Add to print queue', value: 'qonly', cls: 'b' }] : []),
+    ...(isNew || !can('edit') ? [] : [{ label: can('print') ? 'Save & add to print queue' : 'Save & mark for printing', value: 'saveq', cls: 'b' }]),
+    ...(can('edit') ? [{ label: 'Save', value: 'save', cls: 'b' }] : [])]);
+  if (!can('edit')) $('modal').querySelectorAll('input,textarea').forEach(el => el.disabled = true);
+  const draw = () => {
+    const tmp = { ...cur, first_name: $('eFirst').value, last_name: $('eLast').value, bidder_number: cleanNumber($('eNum').value), expires: $('eExp').value };
+    const el = cardEl(tmp, pendingFile ? URL.createObjectURL(pendingFile) : get(cur.photo_path));
+    $('ePrev').innerHTML = ''; $('ePrev').appendChild(el); fitCard(el);
+  };
+  ['eFirst', 'eLast', 'eNum', 'eExp'].forEach(id => $(id).oninput = draw);
+  $('ePhoto').onchange = e => { pendingFile = e.target.files[0] || null; draw(); };
+  draw();
+  if (!isNew) loadHistory(cur, $('eHist'));
+  const vals = () => ({ first_name: $('eFirst').value.trim(), last_name: $('eLast').value.trim(), middle_initial: $('eMI').value.trim(),
+    bidder_number: cleanNumber($('eNum').value), date_issued: $('eIss').value || today(), expires: $('eExp').value || null, notes: $('eNotes').value.trim() });
+  const action = await p;
+  if (!action) return;
+  if (action === 'qonly') { if (!queue.includes(cur.id)) { queue.push(cur.id); saveQueue(); } toast('Added to print queue'); return; }
+  const v = vals();   // modal content is still in the DOM after it closes
+  try {
+    if (action === 'archive') {
+      const ok = await modal(`<p>Move #${esc(cur.bidder_number)} ${esc(cardName(cur))} to the Archive? Their number becomes free to reuse.</p>`, [{ label: 'Cancel', value: false }, { label: 'Archive', value: true, cls: 'r' }]);
+      if (ok) { await archiveBidder(cur, 'Archived by hand'); toast('Archived'); renderRecords(); }
+      return;
+    }
+    if (!v.bidder_number || !v.last_name) { toast('Bidder # and last name are required', 4000); return; }
+    const holder = byNumber.get(v.bidder_number);
+    if (holder && holder.id !== cur.id) {
+      const ok = await modal(`<p><b>Bidder #${esc(v.bidder_number)}</b> is already assigned to <b>${esc(fullName(holder))}</b> (issued ${esc(fmtDate(holder.date_issued))}, last printed ${esc(fmtDate(holder.last_printed)) || 'never'}).</p>
+        <p>Do you want to replace this bidder? ${esc(cardName(holder))} will be moved to the Archive.</p>`, [{ label: 'Cancel', value: false }, { label: 'Replace & archive old', value: true, cls: 'r' }]);
+      if (!ok) return;
+      await archiveBidder(holder, `Number #${v.bidder_number} reused for ${v.first_name} ${v.last_name} on ${today()}`);
+    }
+    let saved;
+    if (isNew) { const { data, error } = await sb.from('bidders').insert({ ...v, source: 'manual' }).select().single(); if (error) throw error; saved = data; bidders.push(saved); }
+    else { const { data, error } = await sb.from('bidders').update(v).eq('id', cur.id).select().single(); if (error) throw error; saved = data; Object.assign(cur, saved); }
+    if (pendingFile) await uploadPhotoFor(isNew ? saved : cur, pendingFile);
+    indexBidders();
+    if (action === 'saveq' || isNew) { const id = (isNew ? saved : cur).id; if (!queue.includes(id)) queue.push(id); saveQueue(); }
+    toast('Saved'); renderRecords();
+  } catch (e) { toast('Save failed: ' + e.message, 6000); }
+}
+
+/* ============================================================
+   PRINT QUEUE + PRINTING
+   ============================================================ */
+function renderQueue() {
+  queue = queue.filter(id => bidders.some(b => b.id === id)); saveQueue();
+  const list = queue.map(id => bidders.find(b => b.id === id));
+  $('qBody').innerHTML = list.map(b => `<tr><td><b>${esc(b.bidder_number)}</b></td><td>${esc(fullName(b))}</td>
+    <td>${b.photo_path ? '✓' : '<span class="chip c-warn">no photo</span>'}</td><td>${esc(fmtDate(b.expires))}</td>
+    <td><button class="link" data-prev="${b.id}">preview</button> · <button class="link" data-rm="${b.id}">remove</button></td></tr>`).join('') || '<tr><td colspan="5" class="mut">Queue is empty.</td></tr>';
+  $('qBody').querySelectorAll('[data-rm]').forEach(a => a.onclick = () => { queue = queue.filter(id => id !== a.dataset.rm); saveQueue(); renderQueue(); });
+  $('qBody').querySelectorAll('[data-prev]').forEach(a => a.onclick = () => editBidder(bidders.find(b => b.id === a.dataset.prev)));
+  $('qPrint').disabled = !list.length; $('qPrint').textContent = list.length ? `Print all (${list.length})` : 'Print all';
+}
+$('qAddNeeds').onclick = () => { bidders.filter(b => needsCard(b) && b.photo_path).forEach(b => { if (!queue.includes(b.id)) queue.push(b.id); }); saveQueue(); renderQueue(); };
+$('qClear').onclick = () => { queue = []; saveQueue(); renderQueue(); };
+$('qPrint').onclick = async () => {
+  const list = queue.map(id => bidders.find(b => b.id === id)).filter(Boolean);
+  const noPhoto = list.filter(b => !b.photo_path);
+  if (noPhoto.length) {
+    const ok = await modal(`<p>${noPhoto.length} card${noPhoto.length > 1 ? 's have' : ' has'} no photo: ${noPhoto.map(b => '#' + esc(b.bidder_number)).join(', ')}. Print anyway?</p>`, [{ label: 'Cancel', value: false }, { label: 'Print anyway', value: true, cls: 'b' }]);
+    if (!ok) return;
+  }
+  await printCards(list, true);
+};
+
+async function printCards(list, track) {
+  const get = await signedUrls(list.map(b => b.photo_path));
+  const area = $('printArea'); area.innerHTML = '';
+  const els = list.map(b => { const el = cardEl(b, get(b.photo_path)); area.appendChild(el); return el; });
+  area.style.display = 'block'; area.style.position = 'absolute'; area.style.left = '-9999px';
+  els.forEach(fitCard);
+  await Promise.all([...area.querySelectorAll('img')].map(img => img.complete ? 0 : new Promise(r => { img.onload = img.onerror = r; })));
+  area.style.cssText = '';
+  window.print();
+  if (!track) return;
+  const ok = await modal(`<h2>Did all ${list.length} card${list.length > 1 ? 's' : ''} print OK?</h2><p class="mut">Yes marks them printed and clears them from the queue.</p>`,
+    [{ label: 'No, keep them in the queue', value: false }, { label: 'Yes, all printed', value: true, cls: 'b' }]);
+  if (!ok) return;
+  const now = new Date().toISOString();
+  for (const b of list) {
+    const { error } = await sb.from('bidders').update({ print_count: (b.print_count || 0) + 1, last_printed: now }).eq('id', b.id);
+    if (!error) { b.print_count = (b.print_count || 0) + 1; b.last_printed = now; }
+  }
+  queue = queue.filter(id => !list.some(b => b.id === id)); saveQueue(); renderQueue();
+}
+
+/* ============================================================
+   ARCHIVE
+   ============================================================ */
+let arTimer;
+$('arSearch').oninput = () => { clearTimeout(arTimer); arTimer = setTimeout(renderArchive, 250); };
+async function renderArchive() {
+  const q = $('arSearch').value.trim();
+  let query = sb.from('bidders_archive').select('*').order('archived_at', { ascending: false }).limit(300);
+  if (q) query = query.or(`bidder_number.ilike.%${q}%,last_name.ilike.%${q}%,first_name.ilike.%${q}%`);
+  const { data, error } = await query;
+  if (error) { toast(error.message, 6000); return; }
+  $('arBody').innerHTML = data.map(a => `<tr><td><b>${esc(a.bidder_number)}</b></td><td>${esc(fullName(a))}</td><td>${esc(fmtDate(a.date_issued))}</td>
+    <td>${esc(fmtDate(a.last_printed))}</td><td>${esc(fmtDate(a.archived_at))}</td><td class="small">${esc(a.archived_reason)}</td>
+    <td><button class="link" data-hist="${a.id}">history</button>${can('archive') ? ` · <button class="link" data-rest="${a.id}">restore</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="mut">Nothing in the archive yet.</td></tr>';
+  $('arBody').querySelectorAll('[data-hist]').forEach(btn => btn.onclick = () => { const a = data.find(x => x.id === btn.dataset.hist); modal(`<h2>#${esc(a.bidder_number)} ${esc(fullName(a))} <span class="chip c-skip">archived</span></h2><div id="aHist" class="hist mut small">Loading…</div>`, [{ label: 'Close', value: null }]); loadHistory(a, $('aHist')); });
+  $('arBody').querySelectorAll('[data-rest]').forEach(btn => btn.onclick = () => restore(data.find(a => a.id === btn.dataset.rest)));
+}
+async function restore(a) {
+  const holder = byNumber.get(a.bidder_number);
+  try {
+    if (holder) {
+      const ok = await modal(`<p>#${esc(a.bidder_number)} is now assigned to <b>${esc(fullName(holder))}</b>. Restoring ${esc(cardName(a))} means archiving ${esc(cardName(holder))}. Go ahead?</p>`, [{ label: 'Cancel', value: false }, { label: 'Swap them', value: true, cls: 'r' }]);
+      if (!ok) return;
+      await archiveBidder(holder, `Number #${a.bidder_number} given back to ${cardName(a)} on ${today()}`);
+    }
+    const { error } = await sb.rpc('restore_bidder', { p_id: a.id }); if (error) throw error;
+    await loadBidders(); renderArchive(); toast('Restored');
+  } catch (e) { toast('Restore failed: ' + e.message, 6000); }
+}
+
+/* ============================================================
+   SETTINGS
+   ============================================================ */
+const SAMPLE = { bidder_number: '1761', first_name: 'Sample', last_name: 'Bidder', expires: addMonths(today(), 12) };
+function renderSettings() {
+  $('stTerm').value = settings.term_months; $('stBar').value = settings.barcode_format;
+  const el = cardEl({ ...SAMPLE, expires: addMonths(today(), $('stTerm').value || 12) }, ''); $('stPreview').innerHTML = ''; $('stPreview').appendChild(el); fitCard(el);
+}
+$('stBar').onchange = () => { settings.barcode_format = $('stBar').value; renderSettings(); };
+$('stSave').onclick = async () => {
+  const { error } = await sb.from('bidder_card_settings').update({ term_months: +$('stTerm').value || 12, barcode_format: $('stBar').value, logo_path: settings.logo_path, updated_at: new Date().toISOString() }).eq('id', 1);
+  if (error) return toast(error.message, 6000);
+  settings.term_months = +$('stTerm').value || 12; toast('Settings saved');
+};
+$('stLogo').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const path = `branding/logo-${Date.now()}.${(f.name.split('.').pop() || 'png').toLowerCase()}`;
+  const { error } = await sb.storage.from(BUCKET).upload(path, f, { contentType: f.type });
+  if (error) return toast(error.message, 6000);
+  settings.logo_path = path; await sb.from('bidder_card_settings').update({ logo_path: path }).eq('id', 1);
+  await loadSettings(); renderSettings(); toast('Logo updated');
+};
+$('stLogoReset').onclick = async () => { settings.logo_path = null; await sb.from('bidder_card_settings').update({ logo_path: null }).eq('id', 1); await loadSettings(); renderSettings(); };
+$('stTest').onclick = () => printCards([SAMPLE], false);
+
+/* ---------- one-time CloudBadging import ---------- */
+$('cbCsv').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  Papa.parse(f, { header: true, skipEmptyLines: true, complete: async r => {
+    const rows = r.data.map(x => ({
+      bidder_number: cleanNumber(x['ID Number']),
+      first_name: String(x['First Name'] ?? '').trim(), last_name: String(x['Last Name'] ?? '').trim(),
+      cb_photo_file: String(x['Photo'] ?? '').trim().split('/').pop() || null,
+      date_issued: (x['Date Issued'] || '').trim() || null, expires: (x['Expiration Date'] || '').trim() || null,
+    })).filter(x => x.bidder_number);
+    const fresh = rows.filter(x => !byNumber.has(x.bidder_number)).map(x => ({ ...x, source: 'cloudbadging',
+      print_count: x.date_issued ? 1 : 0, last_printed: x.date_issued ? x.date_issued + 'T12:00:00Z' : null }));
+    const ok = await modal(`<h2>Import from CloudBadging</h2><p>${rows.length.toLocaleString()} records in the file. <b>${fresh.length.toLocaleString()}</b> will be added; ${(rows.length - fresh.length).toLocaleString()} already have that number in the portal and will be skipped.</p>`,
+      [{ label: 'Cancel', value: false }, { label: `Add ${fresh.length.toLocaleString()} records`, value: true, cls: 'b' }]);
+    if (!ok) { e.target.value = ''; return; }
+    let done = 0, errs = [];
+    for (let i = 0; i < fresh.length; i += 500) {
+      const { error } = await sb.from('bidders').insert(fresh.slice(i, i + 500));
+      if (error) errs.push(error.message); else done += Math.min(500, fresh.length - i);
+      $('cbMsg').textContent = `Records: ${done.toLocaleString()} of ${fresh.length.toLocaleString()} added…`;
+    }
+    await loadBidders();
+    $('cbMsg').innerHTML = `Records: <b>${done.toLocaleString()}</b> added.${errs.length ? ' <span style="color:var(--red)">Errors: ' + errs.map(esc).join('; ') + '</span>' : ''} Now do step 2 when the photos arrive.`;
+    e.target.value = '';
+  } });
+};
+$('cbPhotos').onchange = async e => {
+  const files = [...e.target.files].filter(f => /\.(jpe?g|png)$/i.test(f.name));
+  const byFile = new Map(bidders.filter(b => b.cb_photo_file).map(b => [b.cb_photo_file.toLowerCase(), b]));
+  const todo = [], noMatch = [];
+  for (const f of files) { const b = byFile.get(f.name.toLowerCase()); if (!b) noMatch.push(f.name); else if (!b.photo_path) todo.push([b, f]); }
+  const ok = await modal(`<h2>Load CloudBadging photos</h2><p>${files.length.toLocaleString()} photos found. <b>${todo.length.toLocaleString()}</b> will be added to their bidder.
+    ${files.length - todo.length - noMatch.length ? `${(files.length - todo.length - noMatch.length).toLocaleString()} are already loaded. ` : ''}
+    ${noMatch.length ? `${noMatch.length.toLocaleString()} don't match a record and will be skipped.` : ''}</p><p class="mut small">Keep this tab open until it finishes. It can take a while for a few thousand photos.</p>`,
+    [{ label: 'Cancel', value: false }, { label: 'Start', value: true, cls: 'b' }]);
+  e.target.value = '';
+  if (!ok) return;
+  let done = 0, failed = [];
+  const worker = async () => {
+    while (todo.length) {
+      const [b, f] = todo.shift();
+      try { await uploadPhotoFor(b, f); const d = b.date_issued ? b.date_issued + 'T12:00:00Z' : b.photo_date;
+            await sb.from('bidders').update({ photo_date: d }).eq('id', b.id); b.photo_date = d; done++; }  // keep old photos dated to their card, so they don't show as "needs card"
+      catch (err) { failed.push(`${f.name}: ${err.message}`); }
+      $('cbMsg').textContent = `Photos: ${done.toLocaleString()} loaded, ${todo.length.toLocaleString()} to go${failed.length ? `, ${failed.length} failed` : ''}…`;
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  $('cbMsg').innerHTML = `Photos: <b>${done.toLocaleString()}</b> loaded.${failed.length ? ` <span style="color:var(--red)">${failed.length} failed — run step 2 again to retry them.</span>` : ''}${noMatch.length ? ` ${noMatch.length} files had no matching record.` : ''}`;
+};
+
+/* ============================================================
+   PERMISSIONS + USERS
+   ============================================================ */
+let me = null;
+function can(p) {
+  if (!me || !me.active) return false;
+  if (me.perm_admin || p === 'staff') return true;
+  return !!me['perm_' + p];
+}
+function applyPerms() {
+  document.querySelectorAll('[data-perm]').forEach(el => el.classList.toggle('hide', !can(el.dataset.perm)));
+  const first = [...document.querySelectorAll('nav button')].find(b => !b.classList.contains('hide'));
+  show(first ? first.dataset.v : 'records');
+}
+const PERM_COLS = ['import', 'photos', 'print', 'edit', 'archive', 'admin'];
+const PRESETS = {
+  'Counter (photos + print)': { photos: 1, print: 1 },
+  'Office (import, photos, print, edit)': { import: 1, photos: 1, print: 1, edit: 1 },
+  'Manager (everything but Users/Settings)': { import: 1, photos: 1, print: 1, edit: 1, archive: 1 },
+  'Admin (everything)': { import: 1, photos: 1, print: 1, edit: 1, archive: 1, admin: 1 },
+};
+async function staffFn(body) {
+  const { data, error } = await sb.functions.invoke('staff-admin', { body });
+  if (error) { let msg = error.message; try { msg = (await error.context.json()).error || msg; } catch (e) {} throw new Error(msg); }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+async function renderUsers() {
+  const { data, error } = await sb.from('staff').select('*').order('full_name');
+  if (error) return toast(error.message, 6000);
+  $('uBody').innerHTML = data.map(u => `<tr class="${u.active ? '' : 'mut'}">
+    <td><b>${esc(u.full_name) || '—'}</b>${u.user_id === me.user_id ? ' <span class="chip c-renew">you</span>' : ''}</td><td>${esc(u.email)}</td>
+    ${PERM_COLS.map(p => `<td><input type="checkbox" data-u="${u.user_id}" data-p="${p}" ${u['perm_' + p] ? 'checked' : ''} ${u.user_id === me.user_id && p === 'admin' ? 'disabled title="You can\'t remove your own admin"' : ''}></td>`).join('')}
+    <td>${u.active ? '<span class="chip c-new">On</span>' : '<span class="chip c-skip">Off</span>'}</td>
+    <td class="small"><button class="link" data-pw="${u.user_id}">reset password</button>${u.user_id === me.user_id ? '' : ` · <button class="link" data-act="${u.user_id}" data-on="${u.active ? 0 : 1}">${u.active ? 'turn off login' : 'turn on login'}</button>`}</td></tr>`).join('');
+  $('uBody').querySelectorAll('input[data-p]').forEach(cb => cb.onchange = async () => {
+    const { error } = await sb.from('staff').update({ ['perm_' + cb.dataset.p]: cb.checked }).eq('user_id', cb.dataset.u);
+    if (error) { toast(error.message, 6000); cb.checked = !cb.checked; } else toast('Saved');
+  });
+  $('uBody').querySelectorAll('[data-pw]').forEach(b => b.onclick = async () => {
+    const u = data.find(x => x.user_id === b.dataset.pw);
+    const ok = await modal(`<h2>Reset password</h2><p>New password for <b>${esc(u.full_name || u.email)}</b> (at least 8 characters). Give it to them in person.</p><input type="text" id="pwNew" style="width:260px" autocomplete="off">`,
+      [{ label: 'Cancel', value: false }, { label: 'Set password', value: true, cls: 'b', check: () => $('pwNew').value.length >= 8 || (toast('At least 8 characters'), false) }]);
+    if (!ok) return;
+    try { await staffFn({ action: 'reset_password', user_id: u.user_id, password: $('pwNew').value }); toast('Password changed'); } catch (e) { toast(e.message, 6000); }
+  });
+  $('uBody').querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
+    const on = b.dataset.on === '1';
+    try { await staffFn({ action: 'set_active', user_id: b.dataset.act, active: on }); toast(on ? 'Login turned on' : 'Login turned off'); renderUsers(); } catch (e) { toast(e.message, 6000); }
+  });
+}
+$('uAdd').onclick = async () => {
+  const ok = await modal(`<h2>Add user</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label class="f">Name</label><input type="text" id="nuName" style="width:100%"></div>
+      <div><label class="f">Email (their login)</label><input type="email" id="nuEmail" style="width:100%" autocomplete="off"></div>
+      <div><label class="f">Starting password (8+ characters)</label><input type="text" id="nuPw" style="width:100%" autocomplete="off"></div>
+      <div><label class="f">Quick pick</label><select id="nuPreset" style="width:100%"><option value="">— choose —</option>${Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join('')}</select></div>
+    </div>
+    <label class="f">Permissions</label>
+    <div class="row">${PERM_COLS.map(p => `<label><input type="checkbox" id="nu_${p}"> ${p[0].toUpperCase() + p.slice(1)}</label>`).join('')}</div>
+    <p class="mut small">Give them their email and starting password in person. They can't sign themselves up.</p>`,
+    [{ label: 'Cancel', value: false }, { label: 'Create user', value: true, cls: 'b', check: () => {
+      if (!$('nuEmail').value.includes('@')) { toast('Enter their email'); return false; }
+      if ($('nuPw').value.length < 8) { toast('Password needs at least 8 characters'); return false; }
+      return true; } }].map(x => x));
+  if (!ok) return;
+  const perms = Object.fromEntries(PERM_COLS.map(p => ['perm_' + p, $('nu_' + p).checked]));
+  try {
+    await staffFn({ action: 'create', email: $('nuEmail').value.trim(), password: $('nuPw').value, full_name: $('nuName').value.trim(), perms });
+    toast('User created'); renderUsers();
+  } catch (e) { toast('Could not create user: ' + e.message, 7000); }
+};
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'nuPreset') { const pr = PRESETS[e.target.value] || {}; PERM_COLS.forEach(p => { const cb = $('nu_' + p); if (cb) cb.checked = !!pr[p]; }); }
+});
+
+/* ============================================================
+   NAV + AUTH
+   ============================================================ */
+function show(v) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  document.querySelectorAll('main > section').forEach(s => s.classList.toggle('hide', s.id !== 'v-' + v));
+  if (v === 'photos') renderPhotos();
+  if (v === 'records') renderRecords();
+  if (v === 'queue') renderQueue();
+  if (v === 'notops') renderNotTops();
+  if (v === 'archive') renderArchive();
+  if (v === 'settings') renderSettings();
+  if (v === 'users') renderUsers();
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.v));
+
+$('liBtn').onclick = async () => {
+  $('liMsg').textContent = 'Signing in…';
+  const { error } = await sb.auth.signInWithPassword({ email: $('liEmail').value.trim(), password: $('liPass').value });
+  $('liMsg').textContent = error ? error.message : '';
+};
+$('liPass').onkeydown = e => { if (e.key === 'Enter') $('liBtn').click(); };
+$('logout').onclick = () => sb.auth.signOut();
+
+let started = false;
+async function start(session) {
+  if (!session) { started = false; $('app').classList.add('hide'); $('login').classList.remove('hide'); return; }
+  $('login').classList.add('hide'); $('app').classList.remove('hide');
+  $('whoEmail').textContent = session.user.email;
+  if (started) return; started = true;
+  const { data: row } = await sb.from('staff').select('*').eq('user_id', session.user.id).maybeSingle();
+  me = row;
+  if (!me || !me.active) {
+    $('app').classList.add('hide'); $('login').classList.remove('hide');
+    $('liMsg').textContent = 'This login has not been given access to the card portal. Ask an admin.';
+    started = false; await sb.auth.signOut(); return;
+  }
+  if (me.full_name) $('whoEmail').textContent = me.full_name;
+  applyPerms();
+  await loadSettings(); await loadBidders(); saveQueue(); countNotTops();
+}
+sb.auth.getSession().then(({ data }) => start(data.session));
+sb.auth.onAuthStateChange((_e, session) => start(session));
+</script>
+</body>
+</html>

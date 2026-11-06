@@ -1001,7 +1001,12 @@ $('cbPhotos').onchange = async e => {
   const files = [...e.target.files].filter(f => /\.(jpe?g|png)$/i.test(f.name));
   const byFile = new Map(bidders.filter(b => b.cb_photo_file).map(b => [b.cb_photo_file.toLowerCase(), b]));
   const todo = [], noMatch = [];
-  for (const f of files) { const b = byFile.get(f.name.toLowerCase()); if (!b) noMatch.push(f.name); else if (!b.photo_path) todo.push([b, f]); }
+  for (const f of files) {
+    let b = byFile.get(f.name.toLowerCase());
+    // CloudBadging names photos "<bidder #>-photo.jpg"; use that when its records file left the photo name blank
+    if (!b) { const m = f.name.match(/^(.+)-photo\.(jpe?g|png)$/i); if (m && byNumber.has(m[1])) b = byNumber.get(m[1]); }
+    if (!b) noMatch.push(f.name); else if (!b.photo_path) todo.push([b, f]);
+  }
   const ok = await modal(`<h2>Load CloudBadging photos</h2><p>${files.length.toLocaleString()} photos found. <b>${todo.length.toLocaleString()}</b> will be added to their bidder.
     ${files.length - todo.length - noMatch.length ? `${(files.length - todo.length - noMatch.length).toLocaleString()} are already loaded. ` : ''}
     ${noMatch.length ? `${noMatch.length.toLocaleString()} don't match a record and will be skipped.` : ''}</p><p class="mut small">Keep this tab open until it finishes. It can take a while for a few thousand photos.</p>`,

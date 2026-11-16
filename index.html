@@ -48,6 +48,8 @@
   #mag{position:fixed;display:none;width:520px;height:390px;border:3px solid #fff;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.45);background-color:#222;background-repeat:no-repeat;pointer-events:none;z-index:80}
   .ph.done{opacity:.5}
   .ph .nm{font-size:12px;min-height:16px;margin-top:4px}
+  .ph .rd{font-size:11px;min-height:14px;margin-top:3px}
+  .ph.dup{border-color:var(--amb)}
   .two{display:grid;grid-template-columns:280px 1fr;gap:16px}
   .wait{max-height:70vh;overflow:auto}
   .wait div{padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
@@ -164,8 +166,9 @@
     <h2>Match photos</h2>
     <div class="row">
       <input type="file" id="phFiles" accept="image/*" multiple>
-      <span class="mut small">Pick all the photos from the memory card. Hold the mouse over the card in a photo to enlarge it, type the bidder # and press Enter. Click a photo to see it full screen. Use "remove" for duplicate shots.</span>
+      <span class="mut small">Pick all the photos from the memory card. The portal reads the number on each person's sticker and fills it in. Check them, press <b>Assign all read numbers</b>, then type in any it couldn't read. Hold the mouse over a photo to enlarge it; click it to see it full screen. Use "remove" for duplicate shots.</span>
     </div>
+    <div class="row" style="margin-top:10px"><button class="g hide" id="phAssignAll">Assign all read numbers</button><span id="phReadMsg" class="mut small"></span></div>
   </div>
   <div class="two">
     <div class="panel wait">
@@ -541,8 +544,113 @@ let phItems = [];
 $('phBatch').value = today();
 $('phBatch').onchange = renderWaiting;
 $('phFiles').onchange = e => {
-  for (const f of e.target.files) phItems.push({ file: f, url: URL.createObjectURL(f), done: null });
-  e.target.value = ''; renderPhotos();
+  const added = [];
+  for (const f of e.target.files) { const it = { id: ++phSeq, file: f, url: URL.createObjectURL(f), done: null, val: '', read: null }; phItems.push(it); added.push(it); }
+  e.target.value = ''; renderPhotos(); readNumbers(added);
+};
+
+/* ---------- automatic number reading ----------
+   1) a photo already named by its number (1773.jpg, 1776-2.jpg) uses the file name
+   2) otherwise the read-bidder-number function looks at the sticker in the photo
+   Anything it can't read with confidence is left blank for a person to type. */
+let phSeq = 0, readOff = false;
+function numberFromFileName(name) {
+  const m = String(name).replace(/\.[a-z0-9]+$/i, '').trim().match(/^(\*?\d{2,6}\*?)(?:[-_ ]\(?\d\)?)?$/);
+  return m ? m[1] : '';
+}
+async function blobToB64(blob) {
+  const buf = new Uint8Array(await blob.arrayBuffer()); let bin = '';
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+async function readOne(it) {
+  const fromName = numberFromFileName(it.file.name);
+  if (fromName) { it.read = { number: fromName, how: 'name' }; return; }
+  if (readOff) { it.read = { how: 'off' }; return; }
+  it.read = { how: 'reading' }; paintRead(it);
+  try {
+    const image = await blobToB64(await shrinkImage(it.file, 1200));
+    const { data, error } = await sb.functions.invoke('read-bidder-number', { body: { image } });
+    if (error || !data || data.error) {
+      // function not deployed / no API key yet: stop asking for the rest of this session
+      const status = error?.context?.status;
+      if (status === 404 || data?.error === 'not_configured' || !status) readOff = true;
+      it.read = { how: readOff ? 'off' : 'failed' }; return;
+    }
+    const n = cleanNumber(data.number);
+    it.read = n && data.confident ? { number: n, how: 'photo' } : { how: 'unsure', maybe: n };
+  } catch (e) { it.read = { how: 'failed' }; }
+}
+async function readNumbers(items) {
+  let next = 0;
+  const worker = async () => { while (next < items.length) { const it = items[next++]; await readOne(it); if (it.read?.number && !it.val) it.val = it.read.number; paintRead(it); } };
+  await Promise.all([worker(), worker(), worker()]);
+  renderPhotos();
+}
+function readNote(it) {
+  const r = it.read; if (!r) return '';
+  if (r.how === 'reading') return '<span class="mut">reading the number…</span>';
+  if (r.how === 'name') return '<span class="mut">number from the file name</span>';
+  if (r.how === 'photo') return '<span style="color:var(--grn,#1a7f37)">read from the photo — check it</span>';
+  if (r.how === 'unsure') return `<span style="color:var(--amb)">couldn't read it for sure${r.maybe ? ' (maybe ' + esc(r.maybe) + '?)' : ''} — type the #</span>`;
+  if (r.how === 'failed') return '<span style="color:var(--amb)">couldn\'t read this one — type the #</span>';
+  return '';
+}
+// the numbers that appear on more than one waiting photo (usually a second shot of the same person)
+function dupNumbers() {
+  const seen = new Map();
+  phItems.forEach(it => { if (it.done || it.notops || !it.val) return; const k = barValue(it.val); seen.set(k, (seen.get(k) || 0) + 1); });
+  return new Set([...seen].filter(([, c]) => c > 1).map(([k]) => k));
+}
+const DUP_NOTE = '<span style="color:var(--amb)">same # as another photo — keep one, remove the other</span>';
+function paintDups() {
+  const dups = dupNumbers();
+  document.querySelectorAll('#phGrid .ph').forEach(d => {
+    const it = phItems.find(x => x.id == d.dataset.id); if (!it) return;
+    const isDup = !!it.val && dups.has(barValue(it.val));
+    d.classList.toggle('dup', isDup); d.querySelector('.rd').innerHTML = isDup ? DUP_NOTE : readNote(it);
+  });
+}
+function paintRead(it) {
+  const d = document.querySelector(`.ph[data-id="${it.id}"]`); if (!d) return;
+  const inp = d.querySelector('input');
+  if (it.val && !inp.value) { inp.value = it.val; inp.oninput(); }
+  paintDups(); updateReadBar();
+}
+function readyToAssign() {
+  const dups = dupNumbers(), batch = $('phBatch').value;
+  return phItems.filter(it => {
+    if (it.done || it.notops || !it.val || dups.has(barValue(it.val))) return false;
+    const b = findTyped(it.val);
+    return b && !(b.photo_date && fmtDate(b.photo_date) >= batch);
+  });
+}
+function updateReadBar() {
+  const open = phItems.filter(it => !it.done && !it.notops), reading = open.filter(it => it.read?.how === 'reading').length;
+  const ready = readyToAssign().length;
+  $('phAssignAll').classList.toggle('hide', !ready);
+  $('phAssignAll').textContent = `Assign all read numbers (${ready})`;
+  const blank = open.filter(it => !it.val).length;
+  $('phReadMsg').textContent = !open.length ? '' : reading ? `Reading numbers… ${reading} to go`
+    : [ready ? `${ready} ready` : '', open.length - ready ? `${open.length - ready} need you` : '',
+       readOff && blank ? 'automatic reading isn\'t turned on — type these in' : ''].filter(Boolean).join(' · ');
+}
+$('phAssignAll').onclick = async () => {
+  const list = readyToAssign(); if (!list.length) return;
+  const ok = await modal(`<h2>Assign ${list.length} photo${list.length > 1 ? 's' : ''}</h2><div class="scroll" style="max-height:320px">${list.map(it => { const b = findTyped(it.val);
+      return `<div class="row" style="gap:10px;padding:4px 0;border-bottom:1px solid var(--line)"><img src="${it.url}" style="width:64px;height:48px;object-fit:cover;border-radius:4px"><b>#${esc(b.bidder_number)}</b> ${esc(cardName(b))}</div>`; }).join('')}</div>
+    <p class="mut small">Photos with a number that isn't in Tops, a number used twice, or no number stay on the page for you.</p>`,
+    [{ label: 'Cancel', value: false }, { label: 'Assign them', value: true, cls: 'b' }]);
+  if (!ok) return;
+  const btn = $('phAssignAll'); btn.disabled = true; let done = 0, failed = 0;
+  for (const it of list) {
+    const b = findTyped(it.val), prev = { photo_path: b.photo_path, photo_date: b.photo_date }, wasQueued = queue.includes(b.id);
+    btn.textContent = `Assigning… ${done + 1} of ${list.length}`;
+    try { await uploadPhotoFor(b, it.file); Object.assign(it, { done: b, prev, addedToQueue: !wasQueued }); if (!wasQueued) queue.push(b.id); done++; }
+    catch (e) { failed++; }
+  }
+  saveQueue(); btn.disabled = false; renderPhotos();
+  toast(`${done} photo${done === 1 ? '' : 's'} assigned and queued to print${failed ? ` · ${failed} failed, try those again` : ''}`, 5000);
 };
 function renderWaiting() {
   const d = $('phBatch').value;
@@ -554,6 +662,7 @@ function renderPhotos() {
   $('phGrid').innerHTML = ''; $('phDone').innerHTML = '';
   const open = phItems.filter(it => !it.done && !it.notops).length, finished = phItems.length - open;
   $('phLeft').textContent = phItems.length ? `${open} photo${open === 1 ? '' : 's'} left to match${finished ? ` · ${finished} done` : ''}` : '';
+  const dups = dupNumbers();
   phItems.forEach((it, i) => {
     if (it.done || it.notops) {
       // finished photos leave the grid and go to the folded "Done" list, where they can still be undone
@@ -567,25 +676,27 @@ function renderPhotos() {
       $('phDone').appendChild(r);
       return;
     }
-    const d = document.createElement('div'); d.className = 'ph';
+    const isDup = it.val && dups.has(barValue(it.val));
+    const d = document.createElement('div'); d.className = 'ph' + (isDup ? ' dup' : ''); d.dataset.id = it.id;
     d.innerHTML = `<img src="${it.url}" alt="">
-      <div class="row" style="margin-top:6px;gap:6px"><input type="text" placeholder="Bidder #" style="width:90px"><button class="b" style="padding:6px 10px">Assign</button></div>
-      <div class="nm mut"></div><div class="row small" style="justify-content:space-between"><button class="link nt">Not in Tops</button><button class="link rm" style="color:var(--red)">remove</button></div>`;
+      <div class="row" style="margin-top:6px;gap:6px"><input type="text" placeholder="Bidder #" style="width:90px" value="${esc(it.val)}"><button class="b" style="padding:6px 10px">Assign</button></div>
+      <div class="nm mut"></div><div class="rd">${isDup ? DUP_NOTE : readNote(it)}</div><div class="row small" style="justify-content:space-between"><button class="link nt">Not in Tops</button><button class="link rm" style="color:var(--red)">remove</button></div>`;
     d.querySelector('img').onclick = () => { hideMag(); $('zoomImg').src = it.url; $('zoomBg').style.display = 'flex'; };
     attachMag(d.querySelector('img'), it.url);
     const inp = d.querySelector('input'), nm = d.querySelector('.nm'), btn = d.querySelector('button.b');
     d.querySelector('.nt').onclick = () => markNotInTops(i, cleanNumber(inp.value));
     d.querySelector('.rm').onclick = () => { URL.revokeObjectURL(it.url); phItems.splice(i, 1); hideMag(); renderPhotos(); toast('Photo removed from the list'); };
-    inp.oninput = () => { const b = findTyped(inp.value); nm.textContent = inp.value ? (b ? cardName(b) : 'No active bidder with that #') : ''; nm.style.color = b ? 'var(--ink)' : 'var(--red)'; };
+    inp.oninput = () => { it.val = cleanNumber(inp.value); paintDups(); updateReadBar(); const b = findTyped(inp.value); nm.textContent = inp.value ? (b ? cardName(b) : 'No active bidder with that #') : ''; nm.style.color = b ? 'var(--ink)' : 'var(--red)'; };
     const go = () => assignPhoto(i, inp.value, btn);
     btn.onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') go(); };
+    if (it.val) { const b = findTyped(it.val); nm.textContent = b ? cardName(b) : 'No active bidder with that #'; nm.style.color = b ? 'var(--ink)' : 'var(--red)'; }
     $('phGrid').appendChild(d);
   });
   if (phItems.length && !open) $('phGrid').innerHTML = '<div class="panel mut">All photos are matched. Head to the Print Queue when you\'re ready.</div>';
   $('phDoneBox').classList.toggle('hide', !finished);
   $('phDoneTitle').textContent = `Done (${finished})`;
-  hideMag();
-  const first = $('phGrid').querySelector('.ph input'); if (first) first.focus();
+  hideMag(); updateReadBar();
+  const first = [...$('phGrid').querySelectorAll('.ph input')].find(x => !x.value) || $('phGrid').querySelector('.ph input'); if (first) first.focus();
 }
 $('zoomBg').onclick = () => $('zoomBg').style.display = 'none';
 
